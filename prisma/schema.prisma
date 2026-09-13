@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ServiceCategory {
+  id           Int      @id @default(autoincrement())
+  name         String
+  slug         String   @unique
+  description  String?
+  imageUrl     String?
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  promotions       ServicePromotion[]
+  providerServices ProviderService[]
+  bookings         ServiceBooking[]
+
+  @@map("service_categories")
+}
+
+model ServicePromotion {
+  id              Int       @id @default(autoincrement())
+  categoryId      Int?
+  title           String
+  subtitle        String?
+  imageUrl        String?
+  discountPercent Int?
+  ctaLabel        String?
+  startAt         DateTime?
+  endAt           DateTime?
+  isActive        Boolean   @default(true)
+  displayOrder    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  category ServiceCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@map("service_promotions")
+}
+
+model ServiceProvider {
+  id                Int      @id @default(autoincrement())
+  fullName          String
+  profileImageUrl   String?
+  about             String?
+  yearsOfExperience Int?
+  averageRating     Decimal  @default(0) @db.Decimal(3, 2)
+  reviewCount       Int      @default(0)
+  clientCount       Int      @default(0)
+  ongoingCount      Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  services      ProviderService[]
+  bookings      ServiceBooking[]
+  availability  ProviderAvailability[]
+  conversations Conversation[]
+
+  @@map("service_providers")
+}
+
+model ProviderService {
+  id              Int      @id @default(autoincrement())
+  providerId      Int
+  categoryId      Int
+  displayTitle    String?
+  discountPercent Int?
+  isFeatured      Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  provider ServiceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  category ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, categoryId])
+  @@index([categoryId, isActive])
+  @@index([providerId, isActive])
+  @@map("provider_services")
+}
+
+model ProviderAvailability {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  date       DateTime
+  startTime  String
+  endTime    String
+  isBooked   Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  provider ServiceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  booking  ServiceBooking?
+
+  @@unique([providerId, date, startTime, endTime])
+  @@index([providerId, date, isActive])
+  @@map("provider_availability")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model ServiceBooking {
+  id              Int           @id @default(autoincrement())
+  userId          String
+  providerId      Int
+  categoryId      Int
+  availabilityId  Int           @unique
+  sourceAddressId String?
+  status          BookingStatus @default(PENDING)
+  bookingDate     DateTime
+  startTime       String
+  endTime         String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  provider        ServiceProvider         @relation(fields: [providerId], references: [id])
+  category        ServiceCategory         @relation(fields: [categoryId], references: [id])
+  availability    ProviderAvailability    @relation(fields: [availabilityId], references: [id])
+  addressSnapshot BookingAddressSnapshot?
+  statusHistory   BookingStatusHistory[]
+
+  @@index([userId, status])
+  @@index([providerId, bookingDate])
+  @@map("service_bookings")
+}
+
+model BookingAddressSnapshot {
+  id               Int      @id @default(autoincrement())
+  bookingId        Int      @unique
+  fullName         String
+  phoneNumber      String
+  alternativePhone String?
+  pincode          String
+  state            String
+  city             String
+  houseBuilding    String
+  roadAreaColony   String
+  landmark         String?
+  createdAt        DateTime @default(now())
+
+  booking ServiceBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_address_snapshots")
+}
+
+model BookingStatusHistory {
+  id        Int           @id @default(autoincrement())
+  bookingId Int
+  status    BookingStatus
+  createdAt DateTime      @default(now())
+
+  booking ServiceBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt])
+  @@map("booking_status_history")
+}
+
+model Conversation {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  providerId Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  messages Message[]
+
+  @@unique([userId, providerId])
+  @@index([userId])
+  @@index([providerId])
+  @@map("conversations")
+}
+
+enum MessageType {
+  TEXT
+  VOICE
+}
+
+enum MessageSenderType {
+  USER
+  PROVIDER
+}
+
+model Message {
+  id             Int               @id @default(autoincrement())
+  conversationId Int
+  senderType     MessageSenderType
+  type           MessageType
+  text           String?
+  mediaUrl       String?
+  mediaDuration  Int?
+  createdAt      DateTime          @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
